@@ -43,6 +43,19 @@ def test_direct_adapter_uses_argv_and_classifies_failures():
     assert runner.calls[0][0][-1] == "question"
 
 
+def test_direct_adapter_classifies_login_required():
+    runner = FakeRunner([CommandResult(1, "", "ChatGPT login required")])
+    result = DirectSurfAdapter("chatgpt", runner=runner)("question")
+    assert result.failure == FailureKind.AUTHENTICATION
+
+
+def test_direct_adapter_reads_provider_json():
+    runner = FakeRunner([CommandResult(0, '{"response":"answer"}', "")])
+    result = DirectSurfAdapter("gemini", runner=runner)("question")
+    assert result.ok is True
+    assert result.text == "answer"
+
+
 def test_direct_adapter_rejects_large_prompt_before_spawn():
     runner = FakeRunner([])
     result = DirectSurfAdapter("gemini", runner=runner, prompt_limit=4)("too long")
@@ -55,8 +68,14 @@ def test_claude_extractor_returns_latest_assistant_message_only():
     assert extract_claude_response(page) == "final answer"
 
 
+def test_claude_adapter_requires_tab_id():
+    result = ClaudeSurfAdapter(runner=FakeRunner([]))("question")
+    assert result.failure == FailureKind.NOT_CONFIGURED
+
+
 def test_claude_adapter_uses_supported_ui_and_extracts_response():
     runner = FakeRunner([
+        CommandResult(0, "--- Page Text --- Claude responded: old answer", ""),
         CommandResult(0, "switched", ""),
         CommandResult(0, "filled", ""),
         CommandResult(0, "sent", ""),

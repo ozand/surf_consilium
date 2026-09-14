@@ -11,14 +11,16 @@ import json
 import time
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Callable, Mapping, Protocol
+from typing import Mapping, Protocol
+
+from .adapters import ProviderResult
 
 
 PROVIDERS = ("chatgpt", "gemini", "claude")
 
 
 class Provider(Protocol):
-    def __call__(self, prompt: str) -> str: ...
+    def __call__(self, prompt: str) -> ProviderResult | str: ...
 
 
 @dataclass
@@ -47,9 +49,15 @@ def _call(provider: str, stage: str, prompt: str, output: Path, adapters: Mappin
         answer = adapter(prompt)
     except Exception as exc:  # adapters must not make failures look like answers
         return Result(provider, stage, "failed", error=f"adapter_error: {type(exc).__name__}")
-    if not answer.strip():
+    if isinstance(answer, ProviderResult):
+        if not answer.ok:
+            return Result(provider, stage, "failed", error=answer.failure.value if answer.failure else "provider_failed")
+        text = answer.text
+    else:
+        text = answer
+    if not isinstance(text, str) or not text.strip():
         return Result(provider, stage, "failed", error="empty_response")
-    _write(output, answer)
+    _write(output, text)
     return Result(provider, stage, "success", artifact=str(output))
 
 
@@ -77,7 +85,7 @@ def run_council(
     else:
         # Keep the first implementation conservative: peer-review orchestration
         # is explicit and bounded; no raw prompt construction is hidden here.
-        labels = {chr(65 + i): Path(r.artifact).read_text(encoding="utf-8") for i, r in enumerate(stage1_ok)}
+        labels = {chr(65 + i): Path(r.artifact).read_text(encoding="utf-8") for i, r in enumerate(stage1_ok) if r.artifact}
         review_prompt = "\n\n".join(f"Response {label}:\n{text}" for label, text in labels.items())
         review_prompt = (
             "Review the anonymized responses. Identify agreement, disagreement, "

@@ -57,10 +57,10 @@ The current implementation is deliberately conservative and file-oriented:
 python -m surf_consilium.council --question "Compare approaches to a business problem"
 ```
 
-If using the scripts directly:
+The package entry point can also read a question from a file:
 
 ```bash
-python scripts/run_council.py --question-file question.txt --output-dir .council/run-001
+python -m surf_consilium.council --question-file question.txt --output-dir .council/run-001
 ```
 
 The runner creates an artifact directory containing:
@@ -111,7 +111,7 @@ input. Validate prompt and output sizes before dispatch.
 
 - `SKILL.md` — agent-facing usage and protocol instructions.
 - `AGENTS.md` — local development and agent safety rules.
-- `scripts/` — executable orchestration and provider adapters.
+- `src/surf_consilium/` — package code, orchestration, and provider adapters.
 - `tests/` — deterministic tests that do not require live browser sessions.
 
 ## Development
@@ -119,8 +119,8 @@ input. Validate prompt and output sizes before dispatch.
 From the repository root:
 
 ```bash
-python -m pytest surf_consilium/tests -q
-python -m py_compile surf_consilium/scripts/*.py
+python -m pytest tests -q
+python -m py_compile src/surf_consilium/*.py
 ```
 
 Live provider checks are manual/integration checks and require authenticated browser
