@@ -86,3 +86,34 @@ def test_claude_adapter_uses_supported_ui_and_extracts_response():
     assert result.ok is True
     assert result.text == "answer"
     assert all("extract.text" not in call[0] for call in runner.calls)
+
+
+def test_three_stage_runner_writes_stage3(tmp_path: Path):
+    calls = []
+    def adapter(prompt):
+        calls.append(prompt)
+        return "answer"
+    adapters = {name: adapter for name in ("chatgpt", "gemini", "claude")}
+    manifest = run_council("question", tmp_path, adapters=adapters, chairman=adapter)
+    assert manifest["completion"] == "COMPLETE"
+    assert (tmp_path / "stage3_final.md").read_text(encoding="utf-8") == "answer"
+    assert len(calls) == 7
+
+
+def test_three_stage_runner_marks_partial_stage1(tmp_path: Path):
+    def adapter(prompt):
+        return "answer"
+    manifest = run_council("question", tmp_path, adapters={"chatgpt": adapter})
+    assert manifest["completion"] == "PARTIAL_STAGE1"
+
+
+def test_three_stage_runner_marks_partial_stage2(tmp_path: Path):
+    class Adapter:
+        def __init__(self):
+            self.count = 0
+        def __call__(self, prompt):
+            self.count += 1
+            return "answer" if self.count <= 3 else ""
+    adapter = Adapter()
+    manifest = run_council("question", tmp_path, adapters={name: adapter for name in ("chatgpt", "gemini", "claude")}, chairman=adapter)
+    assert manifest["completion"] == "PARTIAL_STAGE2"
