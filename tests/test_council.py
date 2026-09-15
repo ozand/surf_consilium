@@ -75,8 +75,8 @@ def test_claude_adapter_requires_tab_id():
 
 def test_claude_adapter_uses_supported_ui_and_extracts_response():
     runner = FakeRunner([
-        CommandResult(0, "--- Page Text --- Claude responded: old answer", ""),
         CommandResult(0, "switched", ""),
+        CommandResult(0, "--- Page Text --- Claude responded: old answer", ""),
         CommandResult(0, "filled", ""),
         CommandResult(0, "sent", ""),
         CommandResult(0, "--- Page Text --- Claude responded: answer", ""),

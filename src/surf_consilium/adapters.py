@@ -68,9 +68,11 @@ class SubprocessRunner:
             resolved = shutil.which(candidate)
             if resolved:
                 return resolved
-        raise FileNotFoundError("surf-cli executable not found on PATH")
+        return ""
 
     def run(self, argv: Sequence[str], timeout: float) -> CommandResult:
+        if not self.executable:
+            return CommandResult(127, "", "surf-cli executable not found on PATH")
         command = [self.executable, *argv]
         try:
             completed = subprocess.run(
@@ -252,14 +254,14 @@ class ClaudeSurfAdapter:
         if not self.tab_id:
             return ProviderResult("claude", False, failure=FailureKind.NOT_CONFIGURED, detail="tab_id is required")
 
+        switched = self._surf(["tab.switch", self.tab_id])
+        if switched.returncode != 0:
+            return ProviderResult("claude", False, failure=FailureKind.BROWSER_ROUTING, detail=_detail(switched))
+
         baseline_read = self._surf(["read", "--depth", "5", "--compact"], timeout=min(self.timeout, 60))
         if baseline_read.returncode != 0:
             return ProviderResult("claude", False, failure=FailureKind.BROWSER_ROUTING, detail=_detail(baseline_read))
         baseline = extract_claude_response(baseline_read.stdout)
-
-        switched = self._surf(["tab.switch", self.tab_id])
-        if switched.returncode != 0:
-            return ProviderResult("claude", False, failure=FailureKind.BROWSER_ROUTING, detail=_detail(switched))
 
         filled = self._surf(
             [
