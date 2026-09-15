@@ -113,9 +113,20 @@ def main() -> int:
     source.add_argument("--question")
     source.add_argument("--question-file", type=Path)
     parser.add_argument("--output-dir", type=Path, default=Path(".council/run"))
+    parser.add_argument("--window-id", default=None)
+    parser.add_argument("--chatgpt-tab-id", default=None)
+    parser.add_argument("--gemini-tab-id", default=None)
+    parser.add_argument("--claude-tab-id", default=None)
     args = parser.parse_args()
     question = args.question if args.question is not None else args.question_file.read_text(encoding="utf-8")
-    manifest = run_council(question, args.output_dir, adapters={})
+    from .adapters import ClaudeSurfAdapter, DirectSurfAdapter
+    adapters = {
+        "chatgpt": DirectSurfAdapter("chatgpt"),
+        "gemini": DirectSurfAdapter("gemini"),
+    }
+    if args.claude_tab_id:
+        adapters["claude"] = ClaudeSurfAdapter(window_id=args.window_id, tab_id=args.claude_tab_id)
+    manifest = run_council(question, args.output_dir, adapters=adapters)
     print(json.dumps(manifest, ensure_ascii=False, indent=2))
     return 0 if manifest["completion"] != "FAILED" else 1
 
