@@ -97,8 +97,8 @@ Preserve full provider outputs, but create bounded review inputs separately.
 Run project-scoped checks only:
 
 ```bash
-python -m pytest surf_consilium/tests -q
-python -m py_compile surf_consilium/scripts/*.py
+python -m pytest tests -q
+python -m py_compile src/surf_consilium/*.py
 ```
 
 For live checks, record the exact provider, browser/profile verification, command
@@ -107,7 +107,7 @@ session data in the receipt.
 
 ## Change discipline
 
-- Keep changes confined to `surf_consilium/` unless the governing issue explicitly
+- Keep changes confined to this repository unless the governing issue explicitly
   authorizes another path.
 - Use one branch per task and preserve unrelated working-tree changes.
 - Inspect `git diff` and project-scoped test results before reporting completion.
