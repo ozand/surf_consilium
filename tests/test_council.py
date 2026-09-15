@@ -89,6 +89,39 @@ def test_claude_adapter_uses_supported_ui_and_extracts_response():
     assert all("extract.text" not in call[0] for call in runner.calls)
 
 
+def test_council_preflight_fails_before_provider_calls(tmp_path: Path):
+    calls = []
+    def adapter(prompt):
+        calls.append(prompt)
+        return "answer"
+    def probe(args):
+        if args == ["--version"]:
+            return "surf version 2.13.0"
+        if args == ["doctor"]:
+            return "Doctor result: issues found"
+        raise AssertionError(args)
+    manifest = run_council("question", tmp_path, {name: adapter for name in ("chatgpt", "gemini", "claude")}, preflight=True, probe=probe)
+    assert manifest["completion"] == "FAILED"
+    assert calls == []
+    assert manifest["results"][0]["stage"] == "preflight"
+
+
+def test_council_preflight_accepts_verified_probe(tmp_path: Path):
+    def adapter(prompt):
+        return "answer"
+    def probe(args):
+        if args == ["--version"]:
+            return "surf version 2.13.0"
+        if args == ["doctor"]:
+            return "Doctor result: OK"
+        if args == ["tab.list", "--json"]:
+            return '[{"url":"https://chatgpt.com/","windowId":7},{"url":"https://gemini.google.com/app","windowId":7},{"url":"https://claude.ai/new","windowId":7}]'
+        raise AssertionError(args)
+    manifest = run_council("question", tmp_path, {name: adapter for name in ("chatgpt", "gemini", "claude")}, preflight=True, probe=probe, expected_window_id=7)
+    assert manifest["completion"] == "COMPLETE"
+    assert (tmp_path / "preflight.json").exists()
+
+
 def test_three_stage_runner_writes_stage3(tmp_path: Path):
     calls = []
     def adapter(prompt):

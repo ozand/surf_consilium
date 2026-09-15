@@ -8,7 +8,8 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Mapping, Protocol
 
-from .adapters import ProviderResult
+from .adapters import ProviderResult, SubprocessRunner
+from .preflight import PreflightFailure, run_preflight
 
 PROVIDERS = ("chatgpt", "gemini", "claude")
 MAX_REVIEW_EXCERPT = 2500
@@ -102,11 +103,26 @@ def run_council(
     adapters: Mapping[str, Provider],
     providers: tuple[str, ...] = PROVIDERS,
     chairman: Provider | None = None,
+    preflight: bool = False,
+    probe=None,
+    expected_window_id: str | int | None = None,
 ) -> dict:
     """Run all bounded council stages and return the persisted run manifest."""
     output_dir.mkdir(parents=True, exist_ok=True)
     _write(output_dir / "question.md", question)
     results: list[Result] = []
+    if preflight:
+        try:
+            def default_probe(args):
+                result = SubprocessRunner().run(args, 60)
+                return "\n".join(part for part in (result.stdout, result.stderr) if part)
+            check = run_preflight(probe or default_probe, expected_window_id=expected_window_id)
+            _write(output_dir / "preflight.json", json.dumps({"browser": check.browser, "window_id": check.window_id, "surf_version": check.surf_version, "tab_count": len(check.tabs)}, indent=2) + "\n")
+        except (PreflightFailure, OSError) as exc:
+            results.append(Result("surf", "preflight", "failed", error=str(exc)))
+            manifest = {"version": 1, "created_at": int(time.time()), "providers": list(providers), "completion": "FAILED", "results": [asdict(result) for result in results]}
+            _write(output_dir / "manifest.json", json.dumps(manifest, ensure_ascii=False, indent=2) + "\n")
+            return manifest
 
     for provider in providers:
         results.append(_call(provider, "stage1", question, output_dir / f"stage1_{provider}.md", adapters))
@@ -169,6 +185,8 @@ def main() -> int:
     parser.add_argument("--output-dir", type=Path, default=Path(".council/run"))
     parser.add_argument("--window-id", default=None)
     parser.add_argument("--claude-tab-id", default=None)
+    parser.add_argument("--no-preflight", action="store_true", help="skip Surf browser/profile preflight (unsafe; for offline adapter tests)")
+    parser.add_argument("--expected-window-id", default=None)
     args = parser.parse_args()
     question = args.question if args.question is not None else args.question_file.read_text(encoding="utf-8")
 
@@ -180,7 +198,7 @@ def main() -> int:
     }
     if args.claude_tab_id:
         adapters["claude"] = ClaudeSurfAdapter(window_id=args.window_id, tab_id=args.claude_tab_id)
-    manifest = run_council(question, args.output_dir, adapters=adapters)
+    manifest = run_council(question, args.output_dir, adapters=adapters, preflight=not args.no_preflight, expected_window_id=args.expected_window_id)
     print(json.dumps(manifest, ensure_ascii=False, indent=2))
     return 0 if manifest["completion"] != "FAILED" else 1
 
