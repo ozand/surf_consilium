@@ -8,6 +8,7 @@ from surf_consilium.adapters import (
     extract_claude_response,
 )
 from surf_consilium.council import run_council
+from surf_consilium.preflight import PreflightFailure, parse_tabs, run_preflight, verify_browser_profile
 
 
 class FakeRunner:
@@ -105,6 +106,40 @@ def test_three_stage_runner_marks_partial_stage1(tmp_path: Path):
         return "answer"
     manifest = run_council("question", tmp_path, adapters={"chatgpt": adapter})
     assert manifest["completion"] == "PARTIAL_STAGE1"
+
+
+def test_parse_tabs_rejects_invalid_payload():
+    import pytest
+    with pytest.raises(PreflightFailure):
+        parse_tabs("not json")
+
+
+def test_profile_preflight_rejects_unrelated_tabs():
+    tabs = [{"url": "https://example.com", "windowId": 1}]
+    import pytest
+    with pytest.raises(PreflightFailure, match="unrelated tabs"):
+        verify_browser_profile(tabs)
+
+
+def test_profile_preflight_accepts_provider_tabs_and_window():
+    tabs = [
+        {"url": "https://chatgpt.com/", "windowId": 7},
+        {"url": "https://gemini.google.com/app", "windowId": 7},
+        {"url": "https://claude.ai/new", "windowId": 7},
+    ]
+    assert verify_browser_profile(tabs, expected_window_id=7) == "7"
+
+
+def test_run_preflight_requires_doctor_ok():
+    def probe(args):
+        if args == ["--version"]:
+            return "surf version 2.13.0"
+        if args == ["doctor"]:
+            return "Doctor result: issues found"
+        raise AssertionError(args)
+    import pytest
+    with pytest.raises(PreflightFailure, match="doctor"):
+        run_preflight(probe)
 
 
 def test_three_stage_runner_marks_partial_stage2(tmp_path: Path):
